@@ -1,0 +1,63 @@
+{
+  "name": "LendLoop - Global Automation Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Workflow Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = process.env.N8N_WEBHOOK_HMAC_SECRET || '';\nconst err = $input.first().json;\n\nconst workflowName = err.workflow?.name || 'unknown-workflow';\nconst message = err.execution?.error?.message || 'Unhandled n8n workflow error';\n\n// Strip any sensitive data; emit structured log alert\nconsole.error(JSON.stringify({\n  level: 'ERROR',\n  workflowName,\n  executionId: err.execution?.id || 'n/a',\n  message,\n  timestamp: new Date().toISOString()\n}));\n\nconst body = JSON.stringify({ workflowName, message });\nconst timestamp = String(Date.now());\nconst signature = secret\n  ? crypto.createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')\n  : '';\n\nreturn [{ json: { body, timestamp, signature } }];"
+      },
+      "id": "format-sign-error",
+      "name": "Log Structured Error & Sign Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_HTTP_URL }}/api/n8n/error-report",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-LendLoop-Timestamp", "value": "={{ $json.timestamp }}" },
+            { "name": "X-LendLoop-Signature", "value": "={{ $json.signature }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "string",
+        "body": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "report-error-convex",
+      "name": "Report Failure to Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Workflow Error Trigger": {
+      "main": [[{ "node": "Log Structured Error & Sign Report", "type": "main", "index": 0 }]]
+    },
+    "Log Structured Error & Sign Report": {
+      "main": [[{ "node": "Report Failure to Convex", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true
+  },
+  "active": false,
+  "tags": [{ "name": "lendloop" }]
+}

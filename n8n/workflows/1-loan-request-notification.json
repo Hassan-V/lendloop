@@ -1,0 +1,76 @@
+{
+  "name": "LendLoop - Loan Request & Status Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lendloop-loan-event",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-loan-event",
+      "name": "Convex Loan Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "lendloop-loan-event"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst secret = process.env.N8N_WEBHOOK_HMAC_SECRET;\nif (!secret) {\n  throw new Error('N8N_WEBHOOK_HMAC_SECRET environment variable is not configured');\n}\n\nconst item = $input.first();\nconst headers = item.json.headers || {};\nconst timestamp = headers['x-lendloop-timestamp'] || headers['X-LendLoop-Timestamp'];\nconst signature = headers['x-lendloop-signature'] || headers['X-LendLoop-Signature'];\n\nif (!timestamp || !signature || !/^\\d+$/.test(String(timestamp))) {\n  throw new Error('Missing or malformed HMAC headers');\n}\n\nconst skewMs = Math.abs(Date.now() - Number(timestamp));\nif (skewMs > 300000) {\n  throw new Error('Webhook timestamp outside 5-minute replay window');\n}\n\nconst rawBody = item.binary?.data\n  ? Buffer.from(item.binary.data.data, 'base64').toString('utf8')\n  : JSON.stringify(item.json.body);\n\nconst expectedHex = crypto\n  .createHmac('sha256', secret)\n  .update(`${timestamp}.${rawBody}`)\n  .digest('hex');\n\nconst actualBuf = Buffer.from(String(signature).trim().toLowerCase(), 'hex');\nconst expectedBuf = Buffer.from(expectedHex, 'hex');\nif (actualBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(actualBuf, expectedBuf)) {\n  throw new Error('Invalid HMAC signature');\n}\n\nconst payload = typeof item.json.body === 'string' ? JSON.parse(item.json.body) : item.json.body;\n\n// Data minimization: forward only the notification fields required\nlet subject = `[LendLoop] Tool update: ${payload.toolName}`;\nlet message = `Status for ${payload.toolName} is now ${payload.status}.`;\nif (payload.eventType === 'request_created_webhook') {\n  subject = `[LendLoop] New borrow request for ${payload.toolName}`;\n  message = `Hi ${payload.recipientName}, ${payload.counterpartyName} requested to borrow \"${payload.toolName}\" from ${payload.startDate} to ${payload.endDate}.`;\n} else {\n  subject = `[LendLoop] Loan status updated: ${payload.status}`;\n  message = `Hi ${payload.recipientName}, your loan for \"${payload.toolName}\" (${payload.startDate} to ${payload.endDate}) with ${payload.counterpartyName} is now ${payload.status}.`;\n}\n\nreturn [{\n  json: {\n    verified: true,\n    loanId: payload.loanId,\n    recipientEmail: payload.recipientEmail,\n    recipientName: payload.recipientName,\n    subject,\n    message\n  }\n}];"
+      },
+      "id": "verify-hmac-code",
+      "name": "Verify HMAC & Minimize Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n// Mock notification dispatch log (swap with SMTP / Slack / Discord node using n8n credentials in production)\nconsole.log(JSON.stringify({\n  channel: 'notification_mock',\n  to: data.recipientEmail,\n  subject: data.subject,\n  message: data.message,\n  loanId: data.loanId,\n  dispatchedAt: new Date().toISOString()\n}));\nreturn [{ json: { ok: true, loanId: data.loanId, recipientEmail: data.recipientEmail } }];"
+      },
+      "id": "dispatch-notification",
+      "name": "Dispatch Notification (Mock/Email)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, status: 'notified', loanId: $json.loanId } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [940, 300]
+    }
+  ],
+  "connections": {
+    "Convex Loan Event Webhook": {
+      "main": [[{ "node": "Verify HMAC & Minimize Payload", "type": "main", "index": 0 }]]
+    },
+    "Verify HMAC & Minimize Payload": {
+      "main": [[{ "node": "Dispatch Notification (Mock/Email)", "type": "main", "index": 0 }]]
+    },
+    "Dispatch Notification (Mock/Email)": {
+      "main": [[{ "node": "Respond 200 OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveDataErrorExecution": "all"
+  },
+  "active": false,
+  "tags": [{ "name": "lendloop" }]
+}

@@ -1,0 +1,122 @@
+{
+  "name": "LendLoop - Daily Overdue Loan Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "days", "triggerAtHour": 9, "triggerAtMinute": 0 }]
+        }
+      },
+      "id": "daily-schedule",
+      "name": "Daily 09:00 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = process.env.N8N_WEBHOOK_HMAC_SECRET;\nif (!secret) {\n  throw new Error('N8N_WEBHOOK_HMAC_SECRET environment variable is not configured');\n}\nconst timestamp = String(Date.now());\nconst signature = crypto\n  .createHmac('sha256', secret)\n  .update(`${timestamp}.GET:/api/n8n/overdue-loans`)\n  .digest('hex');\n\nreturn [{ json: { timestamp, signature } }];"
+      },
+      "id": "sign-overdue-get",
+      "name": "Sign Overdue Loans Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.CONVEX_HTTP_URL }}/api/n8n/overdue-loans",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-LendLoop-Timestamp", "value": "={{ $json.timestamp }}" },
+            { "name": "X-LendLoop-Signature", "value": "={{ $json.signature }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-overdue-loans",
+      "name": "Fetch Overdue Loans from Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = process.env.N8N_WEBHOOK_HMAC_SECRET;\nconst response = $input.first().json;\nconst loans = response.loans || [];\nconst dateStr = response.date || new Date().toISOString().slice(0, 10);\n\nreturn loans.map((loan) => {\n  const idempotencyKey = `overdue:${loan.loanId}:${dateStr}`;\n  const callbackPayload = JSON.stringify({\n    loanId: loan.loanId,\n    idempotencyKey,\n    summary: `Overdue reminder sent for ${loan.toolName} (due ${loan.endDate})`\n  });\n  const timestamp = String(Date.now());\n  const signature = crypto\n    .createHmac('sha256', secret)\n    .update(`${timestamp}.${callbackPayload}`)\n    .digest('hex');\n\n  return {\n    json: {\n      loanId: loan.loanId,\n      borrowerEmail: loan.borrowerEmail,\n      borrowerName: loan.borrowerName,\n      toolName: loan.toolName,\n      endDate: loan.endDate,\n      lenderName: loan.lenderName,\n      callbackPayload,\n      timestamp,\n      signature\n    }\n  };\n});"
+      },
+      "id": "prepare-reminders",
+      "name": "Build Reminders & Sign Idempotent Write-Back",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map((item) => {\n  const d = item.json;\n  console.log(JSON.stringify({\n    channel: 'overdue_reminder_mock',\n    to: d.borrowerEmail,\n    subject: `[LendLoop] Friendly reminder: ${d.toolName} was due on ${d.endDate}`,\n    message: `Hi ${d.borrowerName}, please return \"${d.toolName}\" to ${d.lenderName} and mark the loan returned in LendLoop.`,\n    sentAt: new Date().toISOString()\n  }));\n  return item;\n});"
+      },
+      "id": "send-reminder",
+      "name": "Send Overdue Reminder (Mock/Email)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_HTTP_URL }}/api/n8n/reminder-callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-LendLoop-Timestamp", "value": "={{ $json.timestamp }}" },
+            { "name": "X-LendLoop-Signature", "value": "={{ $json.signature }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "string",
+        "body": "={{ $json.callbackPayload }}",
+        "options": {}
+      },
+      "id": "writeback-convex",
+      "name": "Idempotent Write-Back to Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Daily 09:00 Schedule": {
+      "main": [[{ "node": "Sign Overdue Loans Query", "type": "main", "index": 0 }]]
+    },
+    "Sign Overdue Loans Query": {
+      "main": [[{ "node": "Fetch Overdue Loans from Convex", "type": "main", "index": 0 }]]
+    },
+    "Fetch Overdue Loans from Convex": {
+      "main": [[{ "node": "Build Reminders & Sign Idempotent Write-Back", "type": "main", "index": 0 }]]
+    },
+    "Build Reminders & Sign Idempotent Write-Back": {
+      "main": [[{ "node": "Send Overdue Reminder (Mock/Email)", "type": "main", "index": 0 }]]
+    },
+    "Send Overdue Reminder (Mock/Email)": {
+      "main": [[{ "node": "Idempotent Write-Back to Convex", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveDataErrorExecution": "all"
+  },
+  "active": false,
+  "tags": [{ "name": "lendloop" }]
+}
