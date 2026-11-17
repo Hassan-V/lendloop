@@ -130,7 +130,7 @@ function ClerkAuthenticatedShell({
       <AppHeader
         action={
           isSignedIn ? (
-            <UserButton afterSignOutUrl="/" />
+            <UserButton />
           ) : (
             <SignInButton mode="modal">
               <button
