@@ -1,4 +1,4 @@
-# Sanitized Convex Cloud Deployment & Bidirectional HMAC Verification Log
+# Sanitized Convex Cloud Deployment, Seed Data & Bidirectional HMAC Verification Log
 # Personal identifiers, deployment slugs, emails, and secrets replaced with placeholders.
 
 $ cd /workspace/lendloop
@@ -10,9 +10,29 @@ $ npx convex env set N8N_WEBHOOK_HMAC_SECRET <redacted-64-char-hex-secret>
 ✔ Successfully set N8N_WEBHOOK_HMAC_SECRET (on dev deployment <convex-deployment>)
 
 $ npx convex dev --once
-✔ Convex functions ready! (3.71s)
+✔ Convex functions ready! (2.94s)
 
-# Live HTTP Action Security Verification against https://<convex-deployment>.convex.site
+$ npx convex run seed:seedDemoData
+{
+  "loansCreated": 3,
+  "message": "Demo neighborhood users, tools, loans, and automation events seeded",
+  "seeded": true,
+  "toolsCreated": 7,
+  "usersCreated": 3
+}
+
+$ npx convex run tools:listPublic
+# Confirmed server-side data minimization: strips ownerId, ownerEmail, condition, and description
+[
+  { "category": "power_tools", "isAvailable": true, "name": "DeWalt 20V Brushless Hammer Drill" },
+  { "category": "garden", "isAvailable": true, "name": "Fiskars Telescoping Tree Pruner" },
+  { "category": "kitchen", "isAvailable": true, "name": "KitchenAid Artisan 5-Qt Stand Mixer" },
+  { "category": "camping", "isAvailable": true, "name": "Coleman 2-Burner Propane Camp Stove" },
+  { "category": "automotive", "isAvailable": true, "name": "OBD-II Bluetooth Car Diagnostic Scanner" },
+  { "category": "power_tools", "isAvailable": true, "name": "Bosch Orbital Wood Sander" }
+]
+
+# Live HTTP Action Security & Idempotency Verification against https://<convex-deployment>.convex.site
 
 1. Unsigned request -> GET /api/n8n/overdue-loans
    HTTP 401 -> {"error":"Missing timestamp or signature header"}
@@ -23,9 +43,17 @@ $ npx convex dev --once
 3. Stale replay request -> GET /api/n8n/overdue-loans (timestamp -360s, valid HMAC over stale timestamp)
    HTTP 401 -> {"error":"Request timestamp outside allowed replay window"}
 
-4. Valid HMAC-signed query -> GET /api/n8n/overdue-loans (signature = HMAC_SHA256(secret, "${ts}.GET:/api/n8n/overdue-loans"))
-   HTTP 200 -> {"date":"2026-11-17","loans":[]}
+4. Valid HMAC-signed query -> GET /api/n8n/overdue-loans
+   HTTP 200 -> {"date":"2026-11-17","loans":[{"loanId":"<loan-id>","toolName":"Sun Joe 2030 PSI Electric Pressure Washer","endDate":"2026-11-14","borrowerName":"Elena Rostova","borrowerEmail":"elena.rostova@example.com","lenderName":"Maya Lin","reminderCount":1}]}
 
-5. Valid HMAC-signed error visibility callback -> POST /api/n8n/error-report
+5. Valid HMAC-signed reminder write-back (Attempt #1, idempotencyKey="overdue:<loan-id>:2026-11-17")
+   POST /api/n8n/reminder-callback
+   HTTP 200 -> {"deduplicated":false,"ok":true}
+
+6. Duplicate retry with identical idempotencyKey (Attempt #2)
+   POST /api/n8n/reminder-callback
+   HTTP 200 -> {"deduplicated":true,"ok":true}
+
+7. Valid HMAC-signed error visibility callback -> POST /api/n8n/error-report
    Payload: {"workflowName":"demo-verification-check","message":"Synthetic smoke-test error log"}
    HTTP 200 -> {"recorded":true}
