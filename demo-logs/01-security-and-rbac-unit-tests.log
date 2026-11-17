@@ -1,0 +1,51 @@
+$ cd /workspace/lendloop && node --test tests/security.test.mjs
+TAP version 13
+# Subtest: signPayload and verifySignedRequest accept valid signed payload within window
+ok 1 - signPayload and verifySignedRequest accept valid signed payload within window
+  ---
+  duration_ms: 5.601292
+  ...
+# Subtest: verifySignedRequest rejects tampered request body
+ok 2 - verifySignedRequest rejects tampered request body
+  ---
+  duration_ms: 1.095574
+  ...
+# Subtest: verifySignedRequest rejects stale timestamps outside 5-minute replay window
+ok 3 - verifySignedRequest rejects stale timestamps outside 5-minute replay window
+  ---
+  duration_ms: 0.696697
+  ...
+# Subtest: timingSafeEqualHex validates exact hex equality and rejects invalid forms
+ok 4 - timingSafeEqualHex validates exact hex equality and rejects invalid forms
+  ---
+  duration_ms: 0.319435
+  ...
+# Subtest: buildOverdueIdempotencyKey creates deterministic daily keys
+ok 5 - buildOverdueIdempotencyKey creates deterministic daily keys
+  ---
+  duration_ms: 0.11659
+  ...
+# Subtest: sanitizePublicTool strips owner PII, condition, and description
+ok 6 - sanitizePublicTool strips owner PII, condition, and description
+  ---
+  duration_ms: 0.134867
+  ...
+# Subtest: RBAC assertions enforce ownership, admin privileges, and loan participation
+ok 7 - RBAC assertions enforce ownership, admin privileges, and loan participation
+  ---
+  duration_ms: 0.443375
+  ...
+# Subtest: assertValidDateRange checks format and ordering
+ok 8 - assertValidDateRange checks format and ordering
+  ---
+  duration_ms: 0.19845
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 507.727538

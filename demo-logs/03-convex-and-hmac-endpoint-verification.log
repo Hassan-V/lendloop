@@ -1,0 +1,31 @@
+# Sanitized Convex Cloud Deployment & Bidirectional HMAC Verification Log
+# Personal identifiers, deployment slugs, emails, and secrets replaced with placeholders.
+
+$ cd /workspace/lendloop
+$ npx convex env set CLERK_JWT_ISSUER_DOMAIN https://<your-clerk-domain>.clerk.accounts.dev
+✔ Successfully set CLERK_JWT_ISSUER_DOMAIN (on dev deployment <convex-deployment>)
+$ npx convex env set INITIAL_ADMIN_EMAIL <admin-email>
+✔ Successfully set INITIAL_ADMIN_EMAIL (on dev deployment <convex-deployment>)
+$ npx convex env set N8N_WEBHOOK_HMAC_SECRET <redacted-64-char-hex-secret>
+✔ Successfully set N8N_WEBHOOK_HMAC_SECRET (on dev deployment <convex-deployment>)
+
+$ npx convex dev --once
+✔ Convex functions ready! (3.71s)
+
+# Live HTTP Action Security Verification against https://<convex-deployment>.convex.site
+
+1. Unsigned request -> GET /api/n8n/overdue-loans
+   HTTP 401 -> {"error":"Missing timestamp or signature header"}
+
+2. Tampered signature -> GET /api/n8n/overdue-loans (valid X-LendLoop-Timestamp, forged X-LendLoop-Signature)
+   HTTP 401 -> {"error":"Invalid HMAC signature"}
+
+3. Stale replay request -> GET /api/n8n/overdue-loans (timestamp -360s, valid HMAC over stale timestamp)
+   HTTP 401 -> {"error":"Request timestamp outside allowed replay window"}
+
+4. Valid HMAC-signed query -> GET /api/n8n/overdue-loans (signature = HMAC_SHA256(secret, "${ts}.GET:/api/n8n/overdue-loans"))
+   HTTP 200 -> {"date":"2026-11-17","loans":[]}
+
+5. Valid HMAC-signed error visibility callback -> POST /api/n8n/error-report
+   Payload: {"workflowName":"demo-verification-check","message":"Synthetic smoke-test error log"}
+   HTTP 200 -> {"recorded":true}

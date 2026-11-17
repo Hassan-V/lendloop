@@ -1,0 +1,24 @@
+# Sanitized Docker Compose, n8n Healthcheck, and Workflow Export Validation Log
+
+$ cd /workspace/lendloop
+$ python3 -m json.tool n8n/workflows/1-loan-request-notification.json >/dev/null
+$ python3 -m json.tool n8n/workflows/2-daily-overdue-reminders.json >/dev/null
+$ python3 -m json.tool n8n/workflows/3-automation-error-handler.json >/dev/null
+Valid JSON across all 3 exported n8n workflows (0 hardcoded secrets).
+
+$ docker compose --env-file .env.local config -q
+(exit code 0)
+
+$ docker compose --env-file .env.local up -d
+ Container lendloop-n8n Started
+
+$ docker compose --env-file .env.local ps
+NAME           IMAGE              COMMAND                  SERVICE   CREATED          STATUS                    PORTS
+lendloop-n8n   n8nio/n8n:latest   "tini -- /docker-ent…"   n8n       17 seconds ago   Up 15 seconds (healthy)   0.0.0.0:5678->5678/tcp, [::]:5678->5678/tcp
+
+$ curl -i -s http://localhost:5678/healthz
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Content-Length: 15
+
+{"status":"ok"}

@@ -60,7 +60,13 @@ LendLoop is a full-stack neighborhood tool-lending application built with **Next
 
 ---
 
-## Local Setup
+## Local Setup & Integration
+
+For a complete, step-by-step walkthrough covering Clerk JWT setup, Convex environment variables, Docker Compose n8n workflow imports, tunnel setup, and end-to-end verification tests, see **[docs/INTEGRATION_GUIDE.md](docs/INTEGRATION_GUIDE.md)**.
+
+Sanitized execution logs from automated tests, production builds, live HMAC-signed Convex HTTP checks, and Docker n8n startup are available in **[demo-logs/](demo-logs/)**.
+
+### Quick Start Summary
 
 ### 1. Prerequisites
 - Node.js 20+
