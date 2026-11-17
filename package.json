@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "node --test tests/security.test.mjs",
+    "test:e2e": "node --test tests/e2e-live.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,0 +1,36 @@
+$ cd /workspace/lendloop && npm run test:e2e
+TAP version 13
+# Subtest: Next.js landing page returns HTTP 200 without external Clerk redirect
+ok 1 - Next.js landing page returns HTTP 200 without external Clerk redirect
+  ---
+  duration_ms: 5204.38923
+  ...
+# Subtest: Docker n8n healthz returns 200 OK
+ok 2 - Docker n8n healthz returns 200 OK
+  ---
+  duration_ms: 4.700155
+  ...
+# Subtest: Convex tools:listPublic returns seeded tools with zero PII leaked
+ok 3 - Convex tools:listPublic returns seeded tools with zero PII leaked
+  ---
+  duration_ms: 471.02527
+  ...
+# Subtest: Convex RBAC rejects unauthenticated access to protected queries and mutations
+ok 4 - Convex RBAC rejects unauthenticated access to protected queries and mutations
+  ---
+  duration_ms: 1139.535116
+  ...
+# Subtest: Convex HTTP Actions enforce HMAC, replay protection, and idempotent overdue write-backs
+ok 5 - Convex HTTP Actions enforce HMAC, replay protection, and idempotent overdue write-backs
+  ---
+  duration_ms: 2490.970977
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9395.247302

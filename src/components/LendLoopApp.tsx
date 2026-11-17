@@ -1,6 +1,6 @@
 "use client";
 
-import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
+import { SignInButton, UserButton, useAuth, useClerk } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import {
   BadgeCheck,
@@ -18,66 +18,142 @@ import type { Id } from "@convex/_generated/dataModel";
 import { AdminPanel } from "./AdminPanel";
 import { CATEGORY_LABELS, CONDITION_LABELS } from "./formatRelativeTime";
 import { LoanCard, type EnrichedLoanItem } from "./LoanCard";
+import { useAuthActivation } from "./Providers";
 
 type ActiveTab = "browse" | "my_listings" | "my_requests" | "incoming" | "admin";
 
+function AppHeader({ action }: { action: React.ReactNode }) {
+  return (
+    <header className="border-b border-slate-200 bg-white">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-700 text-white">
+            <Wrench className="h-5 w-5" />
+          </div>
+          <div>
+            <span className="text-lg font-bold tracking-tight text-slate-900">
+              LendLoop
+            </span>
+            <p className="text-xs text-slate-500">
+              Borrow what you need. Lend what you don&apos;t.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">{action}</div>
+      </div>
+    </header>
+  );
+}
+
 export function LendLoopApp() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { authEnabled, autoOpenSignIn, requestSignIn, clearAutoOpen } =
+    useAuthActivation();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  if (!authEnabled) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <AppHeader
+          action={
+            <button
+              type="button"
+              onClick={requestSignIn}
+              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-800"
+            >
+              Sign in to lend or borrow
+            </button>
+          }
+        />
+        <main className="mx-auto max-w-6xl px-4 py-8">
+          <PublicToolsView
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <ClerkAuthenticatedShell
+      selectedCategory={selectedCategory}
+      onSelectCategory={setSelectedCategory}
+      autoOpenSignIn={autoOpenSignIn}
+      clearAutoOpen={clearAutoOpen}
+    />
+  );
+}
+
+function ClerkAuthenticatedShell({
+  selectedCategory,
+  onSelectCategory,
+  autoOpenSignIn,
+  clearAutoOpen,
+}: {
+  selectedCategory: string;
+  onSelectCategory: (cat: string) => void;
+  autoOpenSignIn: boolean;
+  clearAutoOpen: () => void;
+}) {
+  const { isSignedIn, isLoaded } = useAuth();
+  const { openSignIn } = useClerk();
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn && autoOpenSignIn) {
+      clearAutoOpen();
+      openSignIn();
+    }
+  }, [isLoaded, isSignedIn, autoOpenSignIn, clearAutoOpen, openSignIn]);
 
   if (!isLoaded) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
-        Loading LendLoop...
+      <div className="min-h-screen bg-slate-50">
+        <AppHeader
+          action={
+            <span className="text-xs text-slate-500">
+              Connecting authentication...
+            </span>
+          }
+        />
+        <main className="mx-auto max-w-6xl px-4 py-8">
+          <PublicToolsView
+            selectedCategory={selectedCategory}
+            onSelectCategory={onSelectCategory}
+          />
+        </main>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-700 text-white">
-              <Wrench className="h-5 w-5" />
-            </div>
-            <div>
-              <span className="text-lg font-bold tracking-tight text-slate-900">
-                LendLoop
-              </span>
-              <p className="text-xs text-slate-500">
-                Borrow what you need. Lend what you don&apos;t.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isSignedIn ? (
-              <UserButton afterSignOutUrl="/" />
-            ) : (
-              <SignInButton mode="modal">
-                <button
-                  type="button"
-                  className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-800"
-                >
-                  Sign in to lend or borrow
-                </button>
-              </SignInButton>
-            )}
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        action={
+          isSignedIn ? (
+            <UserButton afterSignOutUrl="/" />
+          ) : (
+            <SignInButton mode="modal">
+              <button
+                type="button"
+                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-800"
+              >
+                Sign in to lend or borrow
+              </button>
+            </SignInButton>
+          )
+        }
+      />
 
       <main className="mx-auto max-w-6xl px-4 py-8">
         {!isSignedIn ? (
           <PublicToolsView
             selectedCategory={selectedCategory}
-            onSelectCategory={setSelectedCategory}
+            onSelectCategory={onSelectCategory}
           />
         ) : (
           <AuthenticatedDashboard
             selectedCategory={selectedCategory}
-            onSelectCategory={setSelectedCategory}
+            onSelectCategory={onSelectCategory}
           />
         )}
       </main>

@@ -1,12 +1,10 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 
-// Public landing page stays unauthenticated (read-only tool names & categories).
-// All state mutations and authenticated queries enforce JWT identity + RBAC server-side in Convex.
+// Keep "/" completely free of edge auth handshake redirects so unauthenticated
+// visitors load the sanitized public tools board in a single request.
+// All protected mutations and private queries enforce Clerk JWT identity + RBAC server-side in Convex.
 export default clerkMiddleware();
 
 export const config = {
-  matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    "/(api|trpc)(.*)",
-  ],
+  matcher: ["/(api|trpc)(.*)"],
 };
